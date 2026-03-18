@@ -173,11 +173,6 @@
       grid-template-columns:1fr 1fr;
       gap:12px;
     }
-    .row-3{
-      display:grid;
-      grid-template-columns:1fr 1fr 1fr;
-      gap:12px;
-    }
     .output{
       white-space:pre-wrap;
       line-height:1.65;
@@ -251,8 +246,6 @@
       border:1px solid var(--border);
       color:#d1d5db;
     }
-    .success{color:var(--green)}
-    .danger{color:var(--red)}
     .footer{
       padding:10px 0 40px;
       color:#9ca3af;
@@ -268,7 +261,7 @@
       .grid{grid-template-columns:1fr}
     }
     @media (max-width: 700px){
-      .row, .row-3, .kpi{grid-template-columns:1fr}
+      .row, .kpi{grid-template-columns:1fr}
       .topbar-inner{align-items:flex-start; flex-direction:column}
     }
   </style>
@@ -283,7 +276,7 @@
           <div class="small muted">AI assistant for learning, planning, and smarter decisions</div>
         </div>
       </div>
-      <div class="status small" id="apiStatus">Gemini API key: not set</div>
+      <div class="status small" id="apiStatus">AI chat is server-powered</div>
     </div>
   </div>
 
@@ -347,7 +340,7 @@
           </div>
 
           <div class="small muted">
-            Tip: keep your prompt practical and product-focused.
+            No user API key required.
           </div>
         </div>
       </div>
@@ -356,23 +349,11 @@
     <div class="sidebar-cards">
       <div class="card">
         <div class="card-header">
-          <h2>Settings</h2>
-          <span class="small muted">One-time setup</span>
+          <h2>Project Mode</h2>
+          <span class="small muted">Secure deployment</span>
         </div>
         <div class="card-body">
-          <div class="stack">
-            <div>
-              <label class="label">Gemini API Key</label>
-              <input id="apiKeyInput" type="password" placeholder="Paste your Gemini API key here" />
-            </div>
-            <div class="row">
-              <button id="saveKeyBtn">Save Key</button>
-              <button class="secondary" id="removeKeyBtn">Remove Key</button>
-            </div>
-            <div class="small muted">
-              The key is stored only in your browser for this demo.
-            </div>
-          </div>
+          <div class="output">Gemini API calls now run through a secure Vercel server function instead of the browser.</div>
         </div>
       </div>
 
@@ -467,11 +448,6 @@ USDT 10"></textarea>
   </div>
 
   <script>
-    const apiKeyInput = document.getElementById("apiKeyInput");
-    const saveKeyBtn = document.getElementById("saveKeyBtn");
-    const removeKeyBtn = document.getElementById("removeKeyBtn");
-    const apiStatus = document.getElementById("apiStatus");
-
     const chatMessages = document.getElementById("chatMessages");
     const chatInput = document.getElementById("chatInput");
     const sendChatBtn = document.getElementById("sendChatBtn");
@@ -492,30 +468,6 @@ USDT 10"></textarea>
     const buildAlertBtn = document.getElementById("buildAlertBtn");
     const alertOutput = document.getElementById("alertOutput");
 
-    function loadApiKey() {
-      const key = localStorage.getItem("gemini_api_key") || "";
-      apiKeyInput.value = key;
-      apiStatus.textContent = key ? "Gemini API key: saved" : "Gemini API key: not set";
-    }
-
-    function saveApiKey() {
-      const key = apiKeyInput.value.trim();
-      if (!key) {
-        alert("Paste your Gemini API key first.");
-        return;
-      }
-      localStorage.setItem("gemini_api_key", key);
-      apiStatus.textContent = "Gemini API key: saved";
-      alert("API key saved in your browser.");
-    }
-
-    function removeApiKey() {
-      localStorage.removeItem("gemini_api_key");
-      apiKeyInput.value = "";
-      apiStatus.textContent = "Gemini API key: not set";
-      alert("API key removed.");
-    }
-
     function escapeHtml(str) {
       return str
         .replace(/&/g, "&amp;")
@@ -525,7 +477,6 @@ USDT 10"></textarea>
 
     function formatAiMessage(text) {
       const escaped = escapeHtml(text);
-
       return escaped
         .replace(/^### (.*)$/gm, "<strong>$1</strong>")
         .replace(/^## (.*)$/gm, "<strong>$1</strong>")
@@ -562,67 +513,22 @@ USDT 10"></textarea>
       return false;
     }
 
-    async function askGemini(userPrompt) {
-      const apiKey = localStorage.getItem("gemini_api_key");
-      if (!apiKey) {
-        throw new Error("No Gemini API key found. Save your key first.");
-      }
-
-      const systemPrompt = `
-You are OpenClaw Binance Copilot, an AI assistant designed for the Binance ecosystem.
-
-Rules:
-- Be helpful, clear, practical, and concise.
-- Focus on Binance-related user experience, crypto learning, planning, and monitoring.
-- Do not claim guaranteed profits.
-- Always include risk reminders when discussing volatile assets or leverage.
-- Structure replies into these sections when relevant:
-  1. Summary
-  2. Suggested Action
-  3. Risk Notes
-  4. Beginner Tip
-- Keep responses readable for beginners.
-- Keep answers complete but compact.
-      `.trim();
-
-      const payload = {
-        system_instruction: {
-          parts: [{ text: systemPrompt }]
+    async function askBackend(userPrompt) {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
         },
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: userPrompt }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1500
-        }
-      };
+        body: JSON.stringify({ prompt: userPrompt })
+      });
 
-      const response = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKey
-          },
-          body: JSON.stringify(payload)
-        }
-      );
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const errText = await response.text();
-        throw new Error("AI request failed: " + errText);
+        throw new Error(data.error || "Server request failed.");
       }
 
-      const data = await response.json();
-      const text =
-        data?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") ||
-        "No response received from AI.";
-      return text;
+      return data.text || "No response received from AI.";
     }
 
     async function handleChat() {
@@ -637,7 +543,7 @@ Rules:
       addMessage("ai", "Thinking...");
 
       try {
-        const reply = await askGemini(prompt);
+        const reply = await askBackend(prompt);
         chatMessages.removeChild(chatMessages.lastChild);
         addMessage("ai", reply);
       } catch (error) {
@@ -675,7 +581,6 @@ Rules:
 
       dcaOutput.innerHTML =
 `<strong>DCA PLAN FOR ${asset}</strong><br><br>
-
 <b>Summary</b><br>
 • Total budget: $${budget.toFixed(2)}<br>
 • Duration: ${weeks} week(s)<br>
@@ -683,17 +588,14 @@ Rules:
 • Buy frequency: ${frequency}<br>
 • Entries: ${intervals}<br>
 • Per buy: $${amountPerBuy}<br><br>
-
 <b>Why this works</b><br>
 • Removes emotional timing<br>
 • Smooths the impact of short-term volatility<br>
 • Helps users stay disciplined across the full period<br><br>
-
 <b>Suggested Action</b><br>
 • Schedule fixed buys on the same days each week<br>
 • Avoid changing the plan because of short-term fear or hype<br>
 • Review only after the full duration is complete<br><br>
-
 <b>Risk Note</b><br>
 • Crypto is volatile. DCA reduces timing risk, not loss risk.`;
     }
@@ -725,12 +627,8 @@ Rules:
       const total = items.reduce((sum, item) => sum + item.weight, 0);
       const sorted = [...items].sort((a,b) => b.weight - a.weight);
       const top = sorted[0];
-      const stable = items
-        .filter(i => ["USDT","USDC","FDUSD","DAI"].includes(i.asset))
-        .reduce((sum, i) => sum + i.weight, 0);
-      const majors = items
-        .filter(i => ["BTC","ETH","BNB","SOL"].includes(i.asset))
-        .reduce((sum, i) => sum + i.weight, 0);
+      const stable = items.filter(i => ["USDT","USDC","FDUSD","DAI"].includes(i.asset)).reduce((sum, i) => sum + i.weight, 0);
+      const majors = items.filter(i => ["BTC","ETH","BNB","SOL"].includes(i.asset)).reduce((sum, i) => sum + i.weight, 0);
 
       let concentrationNote = top.weight >= 50
         ? `High concentration: ${top.asset} is ${top.weight}% of the portfolio.`
@@ -760,20 +658,16 @@ Rules:
 
       portfolioOutput.innerHTML =
 `<strong>PORTFOLIO REPORT</strong><br><br>
-
 <b>Health Score:</b> ${score}<br><br>
-
 <b>Breakdown</b><br>
 • Parsed total: ${total}%<br>
 • Assets: ${items.length}<br>
 • Stablecoins: ${stable}%<br>
 • Major exposure: ${majors}%<br><br>
-
 <b>Risk Insight</b><br>
 • ${concentrationNote}<br>
 • ${cashNote}<br>
 • ${diversityNote}<br><br>
-
 <b>Action</b><br>
 • ${rebalance}`;
     }
@@ -808,25 +702,19 @@ Rules:
 
       alertOutput.innerHTML =
 `<strong>SMART ALERT</strong><br><br>
-
 <b>Parsed Logic</b><br>
 • Asset: ${asset}<br>
 • Trigger: ${direction} by ${percent}<br>
 • Time window: ${windowText}<br>
 • Volume condition: ${hasVolume ? "Yes, volume confirmation requested" : "No extra volume filter"}<br><br>
-
 <b>Suggested Alert Rule</b><br>
 • Notify user when ${asset} ${direction} by ${percent} within ${windowText}${hasVolume ? " and volume spikes above normal range" : ""}.<br><br>
-
 <b>Why It Matters</b><br>
 • This helps the user react to unusual market movement without watching charts all day.<br><br>
-
 <b>Suggested Next Step</b><br>
 • ${nextStep}<br><br>
-
 <b>Notification Status</b><br>
 • ${canNotify ? "Browser notification permission granted." : "Browser notification permission not granted."}<br><br>
-
 <b>Risk Note</b><br>
 • Alerts are signals, not guarantees. Always confirm context before entering a trade.`;
 
@@ -837,8 +725,6 @@ Rules:
       }
     }
 
-    saveKeyBtn.addEventListener("click", saveApiKey);
-    removeKeyBtn.addEventListener("click", removeApiKey);
     sendChatBtn.addEventListener("click", handleChat);
 
     clearChatBtn.addEventListener("click", () => {
@@ -861,8 +747,6 @@ Rules:
       const granted = await requestNotificationPermission();
       buildAlert(granted);
     });
-
-    loadApiKey();
   </script>
 </body>
 </html>
